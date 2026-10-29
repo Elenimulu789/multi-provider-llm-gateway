@@ -35,17 +35,36 @@ class Settings(BaseModel):
     openai_api_key: SecretStr | None = Field(default=None, repr=False, exclude=True)
     anthropic_api_key: SecretStr | None = Field(default=None, repr=False, exclude=True)
 
-    def key_for(self, provider: str) -> str:
+    def key_issue(self, provider: str) -> str | None:
         secret = self.openai_api_key if provider == "openai" else self.anthropic_api_key
         value = secret.get_secret_value().strip() if secret else ""
+        if not value:
+            return "Key not found or empty"
+        upper = value.upper()
+        if "YOUR_" in upper or "PASTE_" in upper or "REPLACE" in upper:
+            return "Placeholder text found; replace it with the secret code"
+        if "API_KEY=" in upper or "API_KEY =" in upper:
+            return "Value includes a variable assignment; use only the secret code"
+        if any(char in value for char in ('\"', "'", "`", "“", "”")):
+            return "Extra quotation marks inside the value"
+        if "..." in value or "…" in value or "*" in value:
+            return "Masked or shortened key found; use the complete secret code"
+        if any(char.isspace() or not char.isprintable() for char in value):
+            return "Whitespace or a line break inside the key"
+        if provider == "openai" and value.startswith("sk-ant-"):
+            return "Anthropic key entered in the OpenAI setting"
         prefix = "sk-ant-" if provider == "anthropic" else "sk-"
-        if not value.startswith(prefix) or not re.fullmatch(r"sk-[A-Za-z0-9_-]{20,}", value):
+        if not value.startswith(prefix):
+            return "Unexpected key prefix for this provider"
+        if len(value) < 23:
+            return "Key is too short; use the complete secret code"
+        return None
+
+    def key_for(self, provider: str) -> str:
+        if self.key_issue(provider) is not None:
             raise AuthenticationError(provider)
-        return value
+        secret = self.openai_api_key if provider == "openai" else self.anthropic_api_key
+        return secret.get_secret_value().strip()
 
     def configured(self, provider: str) -> bool:
-        try:
-            self.key_for(provider)
-            return True
-        except AuthenticationError:
-            return False
+        return self.key_issue(provider) is None

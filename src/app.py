@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import streamlit as st
 from dotenv import load_dotenv
 from src.security import Settings
+from src.config import resolve_credential
 from src.runtime import SessionRuntime
 from src.pricing import PRICES, PRICING_DATE
 
@@ -21,13 +22,17 @@ st.markdown('<div class="eyebrow">RELAY / MULTI-PROVIDER LLM GATEWAY</div>',unsa
 st.title("One interface. Two providers.")
 st.caption("Stream responses, compare latency, and track every token with a transparent cost calculation.")
 
-def secret(name):
-    try:
-        return st.secrets.get(name) or os.getenv(name) or None
-    except (FileNotFoundError, st.errors.StreamlitSecretNotFoundError):
-        return os.getenv(name) or None
-
-settings = Settings(openai_api_key=secret("OPENAI_API_KEY"), anthropic_api_key=secret("ANTHROPIC_API_KEY"))
+# Keep all diagnostic messages separate from actual credential values.
+try:
+    secret_values = st.secrets
+    # Force lazy loading so absent secret files are caught here.
+    list(secret_values.keys())
+except (FileNotFoundError, st.errors.StreamlitSecretNotFoundError):
+    secret_values = {}
+credentials = {name: resolve_credential(name.upper() + "_API_KEY", secret_values, os.environ)
+               for name in ("openai", "anthropic")}
+settings = Settings(openai_api_key=credentials["openai"].value,
+                    anthropic_api_key=credentials["anthropic"].value)
 with st.sidebar:
     st.header("Request settings")
     provider = st.selectbox("Provider",["OpenAI", "Anthropic"])
@@ -42,7 +47,11 @@ with st.sidebar:
     st.divider()
     st.caption("SERVER CREDENTIAL STATUS")
     for name in ["openai", "anthropic"]:
-        st.write(f"{'✓' if settings.configured(name) else '○'} {name.title()}: {'configured' if settings.configured(name) else 'missing / malformed'}")
+        credential = credentials[name]
+        issue = credential.issue or settings.key_issue(name)
+        st.write(f"{'○' if issue else '✓'} {name.title()}: {issue or 'loaded — format check passed'}")
+        st.caption(f"Source: {credential.source}")
+    st.caption("A format check does not authenticate a key. Only a successful live request confirms provider access.")
     with st.expander("How to configure keys"):
         st.write("Local: copy .env.example to .env, set both keys, then rerun. Hosted: add both keys in the hosting Secrets settings. Never commit .env or secrets.toml.")
     st.caption("Keys stay in server configuration. They are never placed in browser input fields, telemetry or downloads.")

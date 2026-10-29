@@ -1,0 +1,2 @@
+Observed initial draft failure: OpenAI empty choices -> IndexError
+Observed initial draft failure: Anthropic cumulative snapshot 5 then 10 -> 15; expected 10

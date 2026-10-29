@@ -1,0 +1,67 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.17, pytest-9.2.0, pluggy-1.7.0 -- /workspace/scratch/356f873ca722/multi-provider-llm-gateway/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /workspace/scratch/356f873ca722/multi-provider-llm-gateway
+configfile: pyproject.toml
+testpaths: tests
+plugins: asyncio-1.4.1, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collecting ... collected 55 items
+
+tests/test_audit_regressions.py::test_openai_empty_choices_regression PASSED [  1%]
+tests/test_audit_regressions.py::test_anthropic_cumulative_usage_regression PASSED [  3%]
+tests/test_gateway.py::test_unified_stream_protocol[openai-gpt-4o-mini] PASSED [  5%]
+tests/test_gateway.py::test_unified_stream_protocol[anthropic-claude-haiku-4-5-20251001] PASSED [  7%]
+tests/test_gateway.py::test_50_word_prompt_local_token_count_and_provider_overhead PASSED [  9%]
+tests/test_gateway.py::test_ttft_only_on_first_nonempty_text PASSED      [ 10%]
+tests/test_gateway.py::test_anthropic_cumulative_counts_not_summed PASSED [ 12%]
+tests/test_gateway.py::test_no_usage_metadata_is_labeled_estimate PASSED [ 14%]
+tests/test_gateway.py::test_unfinished_stream_is_not_success PASSED      [ 16%]
+tests/test_gateway.py::test_persistent_client_reused_across_calls PASSED [ 18%]
+tests/test_gateway.py::test_concurrent_requests_keep_independent_metrics PASSED [ 20%]
+tests/test_gateway.py::test_event_loop_remains_responsive PASSED         [ 21%]
+tests/test_gateway.py::test_early_consumer_close_closes_upstream PASSED  [ 23%]
+tests/test_gateway.py::test_request_boundaries[kwargs0] PASSED           [ 25%]
+tests/test_gateway.py::test_request_boundaries[kwargs1] PASSED           [ 27%]
+tests/test_gateway.py::test_request_boundaries[kwargs2] PASSED           [ 29%]
+tests/test_gateway.py::test_request_boundaries[kwargs3] PASSED           [ 30%]
+tests/test_gateway.py::test_request_boundaries[kwargs4] PASSED           [ 32%]
+tests/test_gateway.py::test_request_boundaries[kwargs5] PASSED           [ 34%]
+tests/test_gateway.py::test_request_boundaries[kwargs6] PASSED           [ 36%]
+tests/test_gateway.py::test_decimal_cost_and_cache_discount PASSED       [ 38%]
+tests/test_gateway.py::test_invalid_cost_counts[counts0] PASSED          [ 40%]
+tests/test_gateway.py::test_invalid_cost_counts[counts1] PASSED          [ 41%]
+tests/test_gateway.py::test_invalid_cost_counts[counts2] PASSED          [ 43%]
+tests/test_gateway.py::test_anthropic_cache_input_categories_normalized PASSED [ 45%]
+tests/test_gateway.py::test_truncation_warning PASSED                    [ 47%]
+tests/test_gateway.py::test_cancelled_task_closes_upstream PASSED        [ 49%]
+tests/test_gateway.py::test_sdk_constructor_is_lazy_and_reused PASSED    [ 50%]
+tests/test_live.py::test_live_provider[gpt-4o-mini] SKIPPED (Live AP...) [ 52%]
+tests/test_live.py::test_live_provider[claude-haiku-4-5-20251001] SKIPPED [ 54%]
+tests/test_runtime.py::test_session_reuses_same_gateway_and_loop PASSED  [ 56%]
+tests/test_runtime.py::test_config_change_closes_old_gateway PASSED      [ 58%]
+tests/test_sdk_integration.py::test_real_sdk_sse_parsing[openai-gpt-4o-mini] PASSED [ 60%]
+tests/test_sdk_integration.py::test_real_sdk_sse_parsing[anthropic-claude-haiku-4-5-20251001] PASSED [ 61%]
+tests/test_security.py::test_missing_or_malformed_keys[None-openai-gpt-4o-mini] PASSED [ 63%]
+tests/test_security.py::test_missing_or_malformed_keys[None-anthropic-claude-haiku-4-5-20251001] PASSED [ 65%]
+tests/test_security.py::test_missing_or_malformed_keys[-openai-gpt-4o-mini] PASSED [ 67%]
+tests/test_security.py::test_missing_or_malformed_keys[-anthropic-claude-haiku-4-5-20251001] PASSED [ 69%]
+tests/test_security.py::test_missing_or_malformed_keys[your_api_key_here-openai-gpt-4o-mini] PASSED [ 70%]
+tests/test_security.py::test_missing_or_malformed_keys[your_api_key_here-anthropic-claude-haiku-4-5-20251001] PASSED [ 72%]
+tests/test_security.py::test_missing_or_malformed_keys[sk-short-openai-gpt-4o-mini] PASSED [ 74%]
+tests/test_security.py::test_missing_or_malformed_keys[sk-short-anthropic-claude-haiku-4-5-20251001] PASSED [ 76%]
+tests/test_security.py::test_missing_or_malformed_keys[sk-foo bar-openai-gpt-4o-mini] PASSED [ 78%]
+tests/test_security.py::test_missing_or_malformed_keys[sk-foo bar-anthropic-claude-haiku-4-5-20251001] PASSED [ 80%]
+tests/test_security.py::test_settings_repr_and_serialization_hide_keys PASSED [ 81%]
+tests/test_security.py::test_secret_redaction_in_logger PASSED           [ 83%]
+tests/test_security.py::test_sdk_errors_are_typed_and_redacted[401-AuthenticationError] PASSED [ 85%]
+tests/test_security.py::test_sdk_errors_are_typed_and_redacted[429-RateLimitExceededError] PASSED [ 87%]
+tests/test_security.py::test_sdk_errors_are_typed_and_redacted[400-GatewayProviderError] PASSED [ 89%]
+tests/test_security.py::test_sdk_errors_are_typed_and_redacted[500-GatewayProviderError] PASSED [ 90%]
+tests/test_security.py::test_connection_error_is_typed PASSED            [ 92%]
+tests/test_security.py::test_redact_both_key_families PASSED             [ 94%]
+tests/test_security.py::test_unexpected_provider_exception_does_not_expose_detail PASSED [ 96%]
+tests/test_ui.py::test_offline_ui_streaming_and_metrics PASSED           [ 98%]
+tests/test_ui.py::test_ui_simulated_authentication_error PASSED          [100%]
+
+======================== 53 passed, 2 skipped in 4.96s =========================

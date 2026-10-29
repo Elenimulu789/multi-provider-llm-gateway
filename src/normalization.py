@@ -1,0 +1,56 @@
+"""Pure event normalization; no provider SDK types escape into the consumer."""
+from dataclasses import dataclass
+
+@dataclass
+class Usage:
+    input: int = 0
+    output: int = 0
+    cached_read: int = 0
+    write_5m: int = 0
+    write_1h: int = 0
+
+@dataclass
+class Event:
+    text: str = ""
+    usage: Usage | None = None
+    done: bool = False
+    finish_reason: str | None = None
+
+
+def openai_event(raw) -> Event:
+    usage = None
+    if raw.usage is not None:
+        details = getattr(raw.usage, "prompt_tokens_details", None)
+        usage = Usage(input=raw.usage.prompt_tokens, output=raw.usage.completion_tokens,
+                      cached_read=getattr(details, "cached_tokens", 0) or 0)
+    # Final usage-only chunk has an EMPTY choices list, not choices[0].
+    if not raw.choices:
+        return Event(usage=usage)
+    choice = raw.choices[0]
+    return Event(text=choice.delta.content or "", usage=usage,
+                 done=choice.finish_reason is not None, finish_reason=choice.finish_reason)
+
+
+def anthropic_event(raw, previous: Usage) -> Event:
+    if raw.type == "message_start":
+        u = raw.message.usage
+        write_total = getattr(u, "cache_creation_input_tokens", 0) or 0
+        creation = getattr(u, "cache_creation", None)
+        write_1h = getattr(creation, "ephemeral_1h_input_tokens", 0) or 0
+        write_5m = getattr(creation, "ephemeral_5m_input_tokens", None)
+        if write_5m is None:
+            write_5m = max(0, write_total - write_1h)
+        read = getattr(u, "cache_read_input_tokens", 0) or 0
+        return Event(usage=Usage(input=u.input_tokens + read + write_5m + write_1h,
+            output=u.output_tokens, cached_read=read, write_5m=write_5m, write_1h=write_1h))
+    if raw.type == "content_block_delta" and raw.delta.type == "text_delta":
+        return Event(text=raw.delta.text)
+    if raw.type == "message_delta":
+        # Anthropic output counts are CUMULATIVE snapshots, never sum them.
+        output = getattr(raw.usage, "output_tokens", None)
+        return Event(usage=Usage(input=previous.input, output=previous.output if output is None else output,
+            cached_read=previous.cached_read, write_5m=previous.write_5m, write_1h=previous.write_1h),
+            finish_reason=getattr(raw.delta, "stop_reason", None))
+    if raw.type == "message_stop":
+        return Event(done=True)
+    return Event()  # pings, block starts/stops, and unsupported non-text deltas

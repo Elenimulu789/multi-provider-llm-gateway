@@ -1,0 +1,12 @@
+[project]
+name = "multi-provider-llm-gateway"
+version = "1.0.0"
+description = "Async streaming gateway with normalized usage, latency and Decimal cost telemetry"
+requires-python = ">=3.11"
+dependencies = ["openai>=2.0,<3", "anthropic>=0.75,<1", "pydantic>=2.10,<3", "tiktoken>=0.9,<1", "python-dotenv>=1,<2", "streamlit>=1.42,<2", "pytest>=8,<10", "pytest-asyncio>=0.24,<2"]
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = ["live: explicitly opt-in billable API integration tests"]

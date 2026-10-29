@@ -1,127 +1,118 @@
-# AI Assistance and Code Audit
+# AI Assistance and Verification Log
 
-## Assistance used
+## Project Overview
 
-ChatGPT was used for implementation drafting, test creation, and documentation.
-The assignment requirements guided the provider wrapper, interface, and telemetry.
-The manual-review and local-verification record is at the end of this file.
+This project provides a shared interface for streaming responses from OpenAI and Anthropic. It normalizes provider events, validates response structures with Pydantic v2, and displays token usage, response timing, and calculated request costs.
 
-Actual project request:
+AI assistance supported implementation drafting, testing, troubleshooting, and documentation.
 
-> now can you get started on the other assignment i need to get that done asap
+## Summary of Development Requests
 
-Implementation brief derived from the supplied assignment:
+The development requests focused on:
 
-> Build a Python 3.11 async gateway with official OpenAI and Anthropic clients,
-> normalized Pydantic chunks, live timing and token metrics, Decimal costs,
-> typed errors, protected credentials, persistent clients, tests, and a web UI.
+- Designing an asynchronous wrapper for two providers using their official SDKs.
+- Defining shared models for streamed text and telemetry.
+- Handling differences between provider events and token-usage reporting.
+- Calculating request costs using separate input and output rates.
+- Measuring time to first token, latency, and generation speed.
+- Reusing clients and keeping blocking operations outside the event loop.
+- Protecting credentials and displaying clear errors.
+- Building an interactive interface, automated tests, and deployment instructions.
 
-This brief summarizes the implementation requirements; it is not a verbatim
-additional prompt from the conversation.
+These are summaries of the development requests rather than verbatim conversation transcripts.
 
-## Audit examples and saved evidence
+## Code Audit and Corrections
 
-`audit/initial_gateway.py` contains a minimal AI-assisted event-handling example.
-It isolates two common bugs for comparison with the final normalizer. It is not
-a complete first version of the application. The running app never imports it.
+### 1. OpenAI Usage-Only Events
 
-The observed failures are in `audit/baseline_probe.txt`. The before/after source
-comparison is in `audit/normalization.diff`. Regression tests reproduce the
-failures and check the final behavior.
-
-## Finding 1: OpenAI empty choices
-
-Initial example:
+A text-only parsing example accessed the first choice directly:
 
 ```python
-def openai_delta(event):
-    return event.choices[0].delta.content or ""
+return event.choices[0].delta.content or ""
 ```
 
-OpenAI can send a final usage-only event with `choices=[]`. This code raises
-`IndexError`, preventing final token accounting.
+OpenAI can send a final usage event with an empty choices list. Accessing the first element would raise an error and prevent final token accounting.
 
-Final handling in `src/normalization.py`:
+The final parser reads usage separately and checks for empty choices:
 
 ```python
 if not raw.choices:
     return Event(usage=usage)
-choice = raw.choices[0]
 ```
 
-Usage is read separately from text, and empty content becomes an empty string.
-The gateway requests `include_usage=True` and continues reading after the text
-finish event to receive the usage-only tail.
+The gateway continues reading after the text finish event so it can receive the final usage totals.
 
-Verification: `test_openai_empty_choices_regression` and the two-provider
-protocol/official-SDK SSE parsing tests.
+### 2. Anthropic Cumulative Token Counts
 
-## Finding 2: Anthropic cumulative usage
-
-Initial example:
+The initial parsing example added each output-token snapshot to the previous count:
 
 ```python
 return previous_output + event.usage.output_tokens
 ```
 
-Anthropic output-token snapshots are cumulative. A previous count of five and a
-new snapshot of ten mean ten total, not fifteen. Adding them inflates both tokens
-and cost.
+Anthropic reports cumulative output counts. A snapshot of five followed by ten means ten total, not fifteen.
 
-Final handling:
+The final implementation replaces the previous output count with the latest available snapshot:
 
 ```python
 output = getattr(raw.usage, "output_tokens", None)
 output = previous.output if output is None else output
 ```
 
-The latest output snapshot replaces the previous count. Input and cache categories
-are preserved. Message-start, text-delta, usage-delta, and message-stop events have
-separate handling.
+Input and cache categories are preserved separately.
 
-Verification: `test_anthropic_cumulative_usage_regression`,
-`test_anthropic_cumulative_counts_not_summed`, and official-SDK SSE parsing tests.
+The retained file, `audit/initial_gateway.py`, is a minimal event-handling example rather than a complete early application. The failure observations, source comparison, and regression tests are available in:
 
-## Additional checks
+- `audit/baseline_probe.txt`
+- `audit/normalization.diff`
+- `tests/test_audit_regressions.py`
 
-| Area | Implementation check |
+### 3. Credential Configuration Diagnostics
+
+During deployment, the interface used the same “missing / malformed” label for different configuration problems. This made it difficult to distinguish an unread key from an incorrectly formatted value.
+
+The updated implementation separates missing values, placeholders, shortened keys, provider mismatches, and formatting problems. It also identifies the configuration source without displaying the credential.
+
+Tests cover root-level and grouped Streamlit secrets, environment fallback, configuration precedence, and secret-safe diagnostics.
+
+## Additional Review Areas
+
+| Area | Implementation |
 | --- | --- |
-| Event-loop blocking | Official async clients; local tokenization runs through `asyncio.to_thread` |
-| Client reuse | Clients live on the gateway instance and the same session event loop; configuration changes close the old gateway |
-| Cancellation | `aclosing` owns stream lifetimes, including cancellation during consumer backpressure |
-| TTFT | Timer ends on the first non-empty text delta, not a role, ping, or usage event |
-| Cost precision | Decimal arithmetic; six-decimal display formatting does not alter stored precision |
-| Cumulative text | Local output estimates tokenize the accumulated response instead of adding counts for separate chunks |
-| Usage authority | Live estimates, partial provider counts, and final provider usage are labeled separately |
-| Key handling | Server-side configuration, protected settings fields, fixed public errors, and redaction tests |
-| Request limits | Prompt/output bounds, timeout, and no automatic stream replay |
+| Async behavior | Official asynchronous clients; local tokenization runs outside the event loop |
+| Client reuse | Clients persist on the gateway instance and are closed when configuration changes |
+| Cancellation | Stream ownership and cleanup use `aclosing` |
+| Timing | TTFT is set on the first non-empty text delta |
+| Precision | Decimal arithmetic preserves calculated cost precision |
+| Token estimates | Accumulated response text is tokenized rather than summing separately tokenized chunks |
+| Usage accuracy | Local estimates, partial usage, and final provider counts are labeled separately |
+| Security | Server-side credentials, protected settings fields, sanitized errors, and redaction tests |
+| Reliability | Request bounds, timeouts, and no automatic replay of failed streams |
 
-An initial token-count test also needed correction: it compared raw prompt text
-against a mock provider count that included chat-message framing. Raw text was
-51 tokens; the request fixture included seven additional framing tokens. The
-corrected test compares the same quantities and keeps the raw local count separate.
-The seven-token framing value is an estimate, not a guarantee for live requests.
-Anthropic final counts come from its own usage metadata, not tiktoken.
+Local text-token counts are distinct from provider request counts, which can include message framing. Anthropic final counts come from its provider metadata rather than the local tiktoken estimate.
 
-## Automated verification
+## Verification Results
 
-Build-environment result: **53 passed, 2 skipped**. The skipped tests require
-explicitly enabled, billable provider calls. Full output is saved in
-`audit/pytest_output.txt`.
+- **Latest local test result:** 61 passed, 2 skipped.
+- **Local environment:** Windows, Python 3.11.18.
+- **Live streaming:** Both OpenAI and Anthropic were successfully exercised through the interface.
+- **Hosted configuration:** Credential loading was confirmed after saving the keys in the deployed app's Streamlit Secrets settings.
 
-The tests include real SDK parsers over mocked HTTP streams, concurrency,
-cancellation, costs, credential failures, and Streamlit widget flows. Live API
-calls and deployment still require local verification. See `QA_REPORT.md`.
+The two skipped tests are optional billable live checks requiring explicit activation. Default tests use mocks and fixtures, including official SDK parsing over mocked HTTP streams.
 
-## Manual review and local verification
+The retained `audit/pytest_output.txt` records the earlier build-environment run of 53 passed and 2 skipped. The latest local run includes the additional configuration tests.
 
-Complete after reviewing and running the project:
+## Deployment and Manual Review Notes
 
-- Date and operating system:
-- Files reviewed and findings:
-- Additional changes made:
-- Local test result:
-- Live OpenAI result and telemetry:
-- Live Anthropic result and telemetry:
-- Invalid-key or network-error result:
-- Deployment URL or Docker evidence:
+- Hosted application URL:
+- Hosted OpenAI and Anthropic comparison results:
+- Files reviewed and additional findings:
+- Changes made after manual review:
+- Invalid-key or network-error demonstration:
+- Final video URL and duration:
+
+## Limitations
+
+Pricing is maintained in a static table and must be updated when provider rates change. Live token counts can remain estimates until final usage arrives. Interrupted requests may incur charges even when final usage is unavailable.
+
+The application does not include production authentication, per-user spending limits, or provider-invoice reconciliation.
